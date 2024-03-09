@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -10,11 +9,18 @@ import (
 )
 
 const (
-	serverPort    = 53
+	serverPort    = 5300
 	serverAddress = "127.0.0.1"
 )
 
 func main() {
+	// file, err := os.Open("root.zone")
+	// if err != nil {
+	// 	fmt.Printf("Error openning root.zone file %v", err)
+	// }
+
+	// records, _ := dns.ParseRootZoneFile(file)
+	// fmt.Printf("%+v\n", records)
 
 	addr := &net.UDPAddr{
 		Port: serverPort,
@@ -43,14 +49,15 @@ func main() {
 		}
 
 		fmt.Printf("Received DNS packet from %s with %d bytes\n", remoteAddr, n)
-		fmt.Println(hex.EncodeToString(buff[:n]))
-		dnsPacket, err := dns.ParseMessage(buff)
+		// fmt.Println(hex.EncodeToString(buff[:n]))
+		DNSMessageParser := dns.NewDNSMessageParser()
+		message, err := DNSMessageParser.Parse(buff)
 
 		if err != nil {
 			fmt.Printf("Failed to parse DNS packet: %v\n", err)
 			continue
 		}
 
-		fmt.Printf("DNS Packet Content: %+v\n", dnsPacket)
+		fmt.Printf("DNS Packet Content: %+v\n", message)
 	}
 }

@@ -5,46 +5,64 @@ import (
 	"errors"
 )
 
-func ParseMessage(packet []byte) (*DNSMessage, error) {
+type MessageParser interface {
+	Parse(data []byte) (*DNSMessage, error)
+}
+
+type DNSMessageParser struct{}
+
+func NewDNSMessageParser() MessageParser {
+	return &DNSMessageParser{}
+}
+
+func (h *DNSHeader) UnmarshalBinary(data []byte) error {
+	h.ID = binary.BigEndian.Uint16(data[0:2])
+	h.Query = data[2]&0x80 == 0
+	h.Opcode = data[2] >> 3 & 0x0F
+	h.AuthoritativeAnswer = data[2]&0x04 != 0
+	h.Truncated = data[2]&0x02 != 0
+	h.RecursionDesired = data[2]&0x01 != 0
+	h.RecursionAvailable = data[3]&0x80 != 0
+	h.Z = data[3] >> 4 & 0x07
+	h.RCode = data[3] & 0x0F
+	h.QuestionsCount = binary.BigEndian.Uint16(data[4:6])
+	h.AnswersCount = binary.BigEndian.Uint16(data[6:8])
+	h.AuthoritiesCount = binary.BigEndian.Uint16(data[8:10])
+	h.AdditionalRRsCount = binary.BigEndian.Uint16(data[10:12])
+
+	return nil
+}
+
+func (q *DNSQuestion) UnmarshalBinary(data []byte, offset int) (int, error) {
+	q.Name, offset = parseDNSName(data, offset)
+
+	if len(data) < offset+4 {
+		return 0, errors.New("invalid DNS packet")
+	}
+	q.Type = binary.BigEndian.Uint16(data[offset : offset+2])
+	q.Class = binary.BigEndian.Uint16(data[offset+2 : offset+4])
+	offset += 4
+
+	return offset, nil
+}
+
+func (p *DNSMessageParser) Parse(packet []byte) (*DNSMessage, error) {
 	if len(packet) < 12 {
 		return nil, errors.New("invalid DNS packet")
 	}
-
-	var message DNSMessage
-
-	// Parse DNS header
-	message.Header.ID = binary.BigEndian.Uint16(packet[0:2])
-	message.Header.Query = (packet[2] & 0x80) != 1
-	message.Header.Opcode = uint8(packet[2] >> 3 & 0x0F)
-	message.Header.AuthoritativeAnswer = (packet[2] & 0x04) != 0
-	message.Header.Truncated = (packet[2] & 0x02) != 0
-	message.Header.RecursionDesired = (packet[2] & 0x01) != 0
-	message.Header.RecursionAvailable = (packet[3] & 0x80) != 0
-	message.Header.Z = uint8(packet[3] >> 4 & 0x07)
-	message.Header.RCode = uint8(packet[3] & 0x0F)
-	message.Header.QuestionsCount = binary.BigEndian.Uint16(packet[4:6])
-	message.Header.AnswersCount = binary.BigEndian.Uint16(packet[6:8])
-	message.Header.AuthoritiesCount = binary.BigEndian.Uint16(packet[8:10])
-	message.Header.AdditionalRRsCount = binary.BigEndian.Uint16(packet[10:12])
 	offset := 12
+	var message DNSMessage
+	var question DNSQuestion
 
-	// Parse DNS questions
+	message.Header.UnmarshalBinary(packet[:offset])
+
 	for i := 0; i < int(message.Header.QuestionsCount); i++ {
-		var question DNSQuestion
-		question.Name, offset = parseDNSName(packet, offset)
-		if len(packet) < offset+4 {
-			return nil, errors.New("invalid DNS packet")
+		var err error
+		offset, err = question.UnmarshalBinary(packet, offset)
+		if err == nil {
+			message.Questions = append(message.Questions, question)
 		}
-		question.Type = binary.BigEndian.Uint16(packet[offset : offset+2])
-		question.Class = binary.BigEndian.Uint16(packet[offset+2 : offset+4])
-		offset += 4
-		message.Questions = append(message.Questions, question)
 	}
-
-	// Parse DNS answers, authority, and additional records
-	// message.Answers = parseRRs(packet, &offset, int(message.Header.ANCOUNT))
-	// message.Authority = parseRRs(packet, &offset, int(message.Header.NSCOUNT))
-	// message.Additional = parseRRs(packet, &offset, int(message.Header.ARCOUNT))
 
 	return &message, nil
 }

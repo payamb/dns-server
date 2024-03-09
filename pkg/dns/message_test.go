@@ -20,7 +20,9 @@ func TestParseMessage(t *testing.T) {
 	if err != nil {
 		fmt.Println("Cannot parse the hex input")
 	}
-	message, err := ParseMessage(packet)
+
+	DNSMessageParser := NewDNSMessageParser()
+	message, err := DNSMessageParser.Parse(packet)
 	// &{Header:{ID:5170 Query:true Opcode:0 AuthoritativeAnswer:false Truncated:false RecursionDesired:true RecursionAvailable:false Z:0 RCode:0 QuestionsCount:1 AnswersCount:0 AuthoritiesCount:0 AdditionalRRsCount:0} Questions:[{Name:babaee.co.uk. Type:15 Class:1}] Answers:[] Authority:[] Additional:[]}
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -64,14 +66,4 @@ func TestParseMessage(t *testing.T) {
 	if message.Header.AdditionalRRsCount != 0 {
 		t.Errorf("Expected AdditionalRRsCount 0, got %d", message.Header.AdditionalRRsCount)
 	}
-
-	// Test case 2: Invalid DNS packet (too short)
-	// packet = []byte{0x12, 0x34}
-	// message, err = ParseMessage(packet)
-	// if err == nil {
-	// 	t.Error("Expected an error for invalid packet")
-	// }
-	// if message != nil {
-	// 	t.Error("Expected message to be nil for invalid packet")
-	// }
 }
